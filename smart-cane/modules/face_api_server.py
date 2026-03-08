@@ -162,7 +162,7 @@ def _run_enrollment(name: str, relationship: str, photos: list):
         os.makedirs(person_dir, exist_ok=True)
 
         db = _load_db()
-        existing = db.get(name, {}).get('embeddings', [])
+        existing = []  # always replace embeddings on re-enroll
         new_embeddings = []
 
         for i, img_bgr in enumerate(photos):

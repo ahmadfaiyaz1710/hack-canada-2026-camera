@@ -6,6 +6,7 @@ NOTE: ElevenLabs API call and audio playback have been REMOVED from this module.
       The Pi now only generates text; the phone handles TTS + playback.
 """
 
+import concurrent.futures
 import logging
 import os
 import time
@@ -114,12 +115,18 @@ def _call_gemini(name: str, relationship: str, confidence: float) -> Optional[st
     )
 
     try:
-        response = _gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                _gemini_client.models.generate_content,
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            response = future.result(timeout=5)
         phrase = response.text.strip().strip('"').strip("'")
         return phrase if phrase else _fallback_phrase(name, relationship)
+    except concurrent.futures.TimeoutError:
+        logger.warning('[VoiceAlert] Gemini timeout — using fallback phrase')
+        return _fallback_phrase(name, relationship)
     except Exception as e:
         logger.warning(f'[VoiceAlert] Gemini error: {e}')
         return _fallback_phrase(name, relationship)
