@@ -51,9 +51,14 @@ def generate_announcement(
 
     logger.info(f'[VoiceAlert] Announcing: "{phrase}"')
 
-    # Push to mobile app via WebSocket (replaces local TTS)
+    # Push to mobile app via WebSocket — include name + confidence for UI update
     if ws_server is not None:
-        ws_server.send_text_threadsafe(phrase, event_type='face_announcement')
+        ws_server.send_text_threadsafe(
+            phrase,
+            event_type='face_announcement',
+            name=name,
+            confidence=round(confidence, 3),
+        )
     else:
         logger.warning('[VoiceAlert] No WebSocket server — announcement not delivered')
 
