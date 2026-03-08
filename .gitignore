@@ -11,3 +11,4 @@ face_db.json
 .vscode/
 *.swp
 *.swo
+python-storage/tests/unit/url_signer_v4_test_account.json
