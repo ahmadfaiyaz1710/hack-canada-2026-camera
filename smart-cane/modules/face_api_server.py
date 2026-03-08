@@ -36,6 +36,7 @@ CORS(app)
 
 _encoding_status: str = 'idle'   # idle | processing | done | error
 _on_db_updated = None             # callback → face_recognizer.reload_db
+_START_TIME = time.time()
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -126,6 +127,28 @@ def faces_status():
     return jsonify({'status': _encoding_status})
 
 
+@app.route('/status')
+def device_status():
+    """Returns Pi device info for the companion app to poll."""
+    db = _load_db()
+    battery = _read_battery()
+    return jsonify({
+        'battery':      battery,
+        'faces_count':  len(db),
+        'uptime':       round(time.time() - _START_TIME),
+    })
+
+
+def _read_battery() -> int:
+    """Read battery % from UPS HAT if available, otherwise return 100."""
+    try:
+        # INA219-based UPS HATs expose voltage via /sys or I2C
+        with open('/sys/class/power_supply/BAT0/capacity') as f:
+            return int(f.read().strip())
+    except Exception:
+        return 100  # no UPS HAT — report full
+
+
 # ── Background enrollment ─────────────────────────────────────────────────────
 
 def _run_enrollment(name: str, relationship: str, photos: list):
@@ -139,7 +162,7 @@ def _run_enrollment(name: str, relationship: str, photos: list):
         os.makedirs(person_dir, exist_ok=True)
 
         db = _load_db()
-        existing = db.get(name, {}).get('embeddings', [])
+        existing = []  # always replace embeddings on re-enroll
         new_embeddings = []
 
         for i, img_bgr in enumerate(photos):

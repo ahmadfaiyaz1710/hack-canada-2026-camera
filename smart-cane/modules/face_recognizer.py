@@ -25,6 +25,7 @@ FRAME_W, FRAME_H = 1280, 720
 class FaceRecognizer:
     def __init__(self):
         self._db: dict = {}
+        self._frame_count = 0
         self._camera = None
         self._deepface = None
         self._cv2 = None
@@ -96,6 +97,10 @@ class FaceRecognizer:
         if not self._camera or not self._deepface or not self._cv2:
             return []
         if not self._db:
+            return []
+
+        self._frame_count += 1
+        if self._frame_count % 3 != 0:
             return []
 
         try:

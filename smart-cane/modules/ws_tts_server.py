@@ -59,7 +59,7 @@ class WSTTSServer:
 
     # ─── Send API ────────────────────────────────────────────────────────────────
 
-    async def send_text(self, text: str, event_type: str = 'announcement') -> None:
+    async def send_text(self, text: str, event_type: str = 'announcement', **extra) -> None:
         """Broadcast a TTS text message to all connected mobile clients."""
         if not self.clients:
             logger.debug('[WS TTS] No clients connected — skipping TTS push')
@@ -69,6 +69,7 @@ class WSTTSServer:
             'text': text,
             'type': event_type,
             'timestamp': time.time(),
+            **extra,
         })
 
         # Send to all clients concurrently; ignore individual failures
@@ -81,14 +82,14 @@ class WSTTSServer:
             if isinstance(result, Exception):
                 logger.warning(f'[WS TTS] Failed to send to client {i}: {result}')
 
-    def send_text_threadsafe(self, text: str, event_type: str = 'announcement') -> None:
+    def send_text_threadsafe(self, text: str, event_type: str = 'announcement', **extra) -> None:
         """
         Thread-safe wrapper for calling send_text() from a non-async thread.
         Use this from main.py's obstacle/camera threads.
         """
         if self._loop and not self._loop.is_closed():
             asyncio.run_coroutine_threadsafe(
-                self.send_text(text, event_type),
+                self.send_text(text, event_type, **extra),
                 self._loop,
             )
 
