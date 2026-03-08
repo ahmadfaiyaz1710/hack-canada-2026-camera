@@ -12,3 +12,7 @@ face_db.json
 *.swp
 *.swo
 python-storage/tests/unit/url_signer_v4_test_account.json
+face_db.json
+data/known_faces/
+__pycache__/
+*.pyc

@@ -1,0 +1,11 @@
+websockets>=12.0
+google-generativeai>=0.7.0
+bless>=0.2.5
+pyserial>=3.5
+RPi.GPIO>=0.7.1
+opencv-python>=4.9.0
+numpy>=1.26.0
+deepface>=0.0.93
+tf-keras>=2.16.0
+flask>=3.0.0
+flask-cors>=4.0.0
