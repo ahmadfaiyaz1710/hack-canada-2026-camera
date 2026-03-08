@@ -17,21 +17,24 @@
         android:textColor="#1A1A2E"
         android:layout_marginBottom="20dp"/>
 
-    <!-- Device selection -->
+    <!-- IP input -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Select paired Raspberry Pi:"
+        android:text="Raspberry Pi IP address:"
         android:textSize="14sp"
         android:textColor="#555555"/>
 
-    <Spinner
-        android:id="@+id/deviceSpinner"
+    <EditText
+        android:id="@+id/ipInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:hint="e.g. 192.168.1.100"
+        android:inputType="text"
         android:layout_marginTop="6dp"
         android:layout_marginBottom="12dp"
-        android:background="@drawable/spinner_bg"/>
+        android:padding="12dp"
+        android:background="#FFFFFF"/>
 
     <Button
         android:id="@+id/connectButton"

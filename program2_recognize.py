@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Program 2: Face Recognition + Gemini Greeting + Bluetooth TX
+Program 2: Face Recognition + Gemini Greeting + WiFi TX
 -------------------------------------------------------------
-Uses DeepFace ArcFace embeddings compared via EUCLIDEAN DISTANCE
-(cosine similarity is the wrong metric for ArcFace — euclidean is correct).
+Uses DeepFace ArcFace embeddings compared via EUCLIDEAN DISTANCE.
 
 Threshold: distance < THRESHOLD means "same person".
   Typical good values: 0.9 – 1.2  (start at 1.1, lower if false positives)
+
+Sends greeting strings to the companion Android app over WiFi (TCP port 5050).
+The Pi runs a TCP server; the Android app connects as a client.
 """
 
 import os
@@ -29,8 +31,7 @@ COOLDOWN_SEC     = 10
 FRAME_W, FRAME_H = 1280, 720
 
 GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY", "")
-BT_DEVICE_ADDR   = os.environ.get("BT_DEVICE_ADDR", "")
-BT_PORT          = int(os.environ.get("BT_PORT", "1"))
+TCP_PORT         = int(os.environ.get("TCP_PORT", "5050"))
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -42,40 +43,53 @@ gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-# ── Bluetooth ─────────────────────────────────────────────────────────────────
-_bt_socket = None
+# ── WiFi TCP Server ──────────────────────────────────────────────────────────
+_clients: list[socket.socket] = []
+_clients_lock = threading.Lock()
+_server_socket = None
 
-def bt_connect() -> bool:
-    global _bt_socket
-    if not BT_DEVICE_ADDR:
-        print("[BT] BT_DEVICE_ADDR not set — Bluetooth disabled.")
-        return False
-    try:
-        sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-        sock.settimeout(10)
-        sock.connect((BT_DEVICE_ADDR, BT_PORT))
-        sock.settimeout(None)
-        _bt_socket = sock
-        print(f"[BT] Connected to {BT_DEVICE_ADDR} channel {BT_PORT}")
-        return True
-    except Exception as e:
-        print(f"[BT] Connection failed: {e}")
-        _bt_socket = None
-        return False
+def start_tcp_server():
+    """Start a TCP server that accepts Android client connections."""
+    global _server_socket
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("0.0.0.0", TCP_PORT))
+    srv.listen(5)
+    _server_socket = srv
+    print(f"[WiFi] TCP server listening on port {TCP_PORT}")
 
-def bt_send(text: str):
-    global _bt_socket
-    if _bt_socket is None:
-        print(f"[BT] (no connection) message: {text!r}")
-        return
-    try:
-        _bt_socket.send((text + "\n").encode("utf-8"))
-        print(f"[BT] Sent: {text!r}")
-    except Exception as e:
-        print(f"[BT] Send error: {e} — reconnecting…")
-        _bt_socket = None
-        if bt_connect():
-            bt_send(text)
+    def accept_loop():
+        while True:
+            try:
+                client, addr = srv.accept()
+                with _clients_lock:
+                    _clients.append(client)
+                print(f"[WiFi] Client connected: {addr}")
+            except Exception as e:
+                print(f"[WiFi] Accept error: {e}")
+                break
+
+    t = threading.Thread(target=accept_loop, daemon=True)
+    t.start()
+
+def wifi_send(text: str):
+    """Send a line of text to all connected Android clients."""
+    data = (text + "\n").encode("utf-8")
+    with _clients_lock:
+        dead = []
+        for client in _clients:
+            try:
+                client.sendall(data)
+                print(f"[WiFi] Sent: {text!r}")
+            except Exception as e:
+                print(f"[WiFi] Send error: {e} — dropping client")
+                dead.append(client)
+        for d in dead:
+            _clients.remove(d)
+            try:
+                d.close()
+            except Exception:
+                pass
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -150,7 +164,7 @@ def _worker():
             break
         name, dist = item
         greeting = get_gemini_greeting(name)
-        bt_send(greeting)
+        wifi_send(greeting)
         _work_queue.task_done()
 
 _worker_thread = threading.Thread(target=_worker, daemon=True)
@@ -199,7 +213,7 @@ def main():
     print(f"\n[Config] People: {list(db.keys())}")
     print(f"[Config] Metric: euclidean distance  |  Match if dist < {THRESHOLD}\n")
 
-    bt_connect()
+    start_tcp_server()
 
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(
@@ -255,8 +269,11 @@ def main():
         cv2.destroyAllWindows()
         _work_queue.put(None)
         _worker_thread.join(timeout=5)
-        if _bt_socket:
-            _bt_socket.close()
+        with _clients_lock:
+            for c in _clients:
+                c.close()
+        if _server_socket:
+            _server_socket.close()
         print("[Main] Shutdown complete.")
 
 
